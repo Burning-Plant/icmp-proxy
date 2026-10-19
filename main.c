@@ -1,38 +1,75 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
 #define PACKET_LENGTH 4096
 
-typedef struct = {
-	u_int4_t version;
-	u_int4_t ihl;
+typedef struct iphdr {
+	unsigned int version : 4;
+	unsigned int ihl : 4;
 	u_int8_t tos;
-	u_int16_t len;
-	u_int32_t id;
-	char flags;
+	u_int16_t totalLength;
 
+	u_int16_t id;
+	unsigned int flags : 3;
+	unsigned int fragmentOffset : 13;
 
+	u_int8_t ttl;
+	u_int8_t protocol;
+	u_int16_t checksum;
+
+	u_int32_t sourceAddr;
+
+	u_int32_t destAddr;
 }iphdr;
+
+// From RFC 1071 //
+u_int16_t checksum(int count, void* addr){
+
+    /* Compute Internet Checksum for "count" bytes
+    *         beginning at location "addr".
+    */
+    
+    int sum = 0;
+    
+    while( count > 1 ){
+        sum += * (u_int16_t *) addr++;
+        count -= 2;
+    }
+    
+    /* Add the left-over byte, if any */
+    if( count > 0 ){
+        sum += * (u_int8_t *)addr;
+    }
+    
+    /* Fold 32-bit sum to 16 bits */
+    while( sum >> 16 ){
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+    
+    return (u_int16_t)(~sum);
+}
+
+
 
 int main(void) {
 
-	u_int16_t src_port, dst_port;
-	u_int32_t src_addr, dst_addr;
-	dst_addr = inet_addr("8.8.8.8");
+	u_int16_t src_port, dest_port;
+	u_int32_t src_addr, dest_addr;
+	dest_addr = inet_addr("8.8.8.8");
 	src_addr = inet_addr("127.0.0.1");
 
 
 	char buffer[PACKET_LENGTH];
-	memset(buffer, 0, PCKT_LEN);
+	memset(buffer, 0, PACKET_LENGTH);
 
 	struct iphdr *ip = (struct iphdr *) buffer;
-	struct icmphdr *icmp = (struct icmphdr *) (buffer + sizeof(struct iphdr)); //mem address starts after the iphdr
+	struct icmphdr *icmp = (struct icmphdr *) (buffer + sizeof(iphdr)); //mem address starts after the iphdr
 	struct sockaddr_in sin;
-
 
 	int socketd = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if( socketd < 0) {
@@ -42,10 +79,25 @@ int main(void) {
 
 
 	sin.sin_family = AF_INET;
-	sin.sin_port = 0; //icmp doesnt use a port
-	sin.sin_addr.s_addr = dst_addr;
+	sin.sin_port = 9900; //icmp doesnt use a port
+	sin.sin_addr.s_addr = dest_addr;
 
-	int sendError = sendto(socketd, buffer, ip->tot_len, 0, (struct sockaddr *)&sin, sizeof(sin));
+	ip->version = 4;
+	ip->ihl = 5;
+	ip->tos = 0;
+	ip->totalLength = 84;//total length
+	ip->id = 0;
+	ip->flags = 0b010; //bits are R|DF|MF
+	ip->fragmentOffset = 0;
+	ip->ttl = 64;
+	//checksum
+	ip->sourceAddr = src_addr;
+	ip->destAddr = dest_addr;
+
+
+	ip->checksum = checksum(ip->totalLength,buffer);
+
+	int sendError = sendto(socketd, buffer, ip->totalLength, 0, (struct sockaddr *)&sin, sizeof(sin));
 	
 	if (sendError < 0) {
 		perror("sendto()");
