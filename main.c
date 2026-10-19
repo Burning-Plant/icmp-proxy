@@ -8,24 +8,20 @@
 
 #define PACKET_LENGTH 4096
 
+#pragma pack(push, 1)
 typedef struct iphdr {
-	unsigned int version : 4;
-	unsigned int ihl : 4;
-	unsigned int tos : 8;
-	unsigned int totalLength : 16;
-
-	unsigned int id : 16;
-	unsigned int flags : 3;
-	unsigned int fragmentOffset : 13;
-
-	unsigned int ttl : 16;
-	unsigned int protocol : 16;
-	unsigned int checksum : 16;
-
-	unsigned int sourceAddr : 32;
-
-	unsigned destAddr : 32;
-}iphdr;
+    uint8_t  version_ihl; // Version (4 bits) + IHL (4 bits)
+    uint8_t  tos;         // Type of Service
+    uint16_t totalLength; // Total Length
+    uint16_t id;          // Identification
+    uint16_t flag_fragOff;// Flags (3 bits) + Fragment Offset (13 bits)
+    uint8_t  ttl;         // Time to Live
+    uint8_t  protocol;    // Protocol
+    uint16_t checksum;    // Header Checksum
+    uint32_t saddr;       // Source Address
+    uint32_t daddr;       // Destination Address
+} iphdr;
+#pragma pack(pop)
 
 // From RFC 1071 //
 u_int16_t checksum(int count, void* addr){
@@ -33,11 +29,11 @@ u_int16_t checksum(int count, void* addr){
     /* Compute Internet Checksum for "count" bytes
     *         beginning at location "addr".
     */
-    
+    u_int8_t * ptr = (u_int8_t *) addr;
     int sum = 0;
     
     while( count > 1 ){
-        sum += * (u_int16_t *) addr++;
+        sum += * (u_int16_t *) ptr++;
         count -= 2;
     }
     
@@ -59,9 +55,9 @@ u_int16_t checksum(int count, void* addr){
 int main(void) {
 
 	u_int16_t src_port, dest_port;
-	u_int32_t src_addr, dest_addr;
-	dest_addr = inet_addr("8.8.8.8");
-	src_addr = inet_addr("192.168.1.186");
+	u_int32_t source, destination;
+	destination = inet_addr("8.8.8.8");
+	source = inet_addr("192.168.1.198");
 
 
 	char buffer[PACKET_LENGTH];
@@ -71,31 +67,31 @@ int main(void) {
 	struct icmphdr *icmp = (struct icmphdr *) (buffer + sizeof(iphdr)); //mem address starts after the iphdr
 	struct sockaddr_in sin;
 
-	int socketd = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
+	int socketd = socket(PF_INET, SOCK_RAW, IPPROTO_RAW);
 	if( socketd < 0) {
 		perror("socket() error");
 		exit(-2);
 	}
+	int one = 1;
+	setsockopt(socketd,IPPROTO_IP, IP_HDRINCL, &one, sizeof(one));
 
 
 	sin.sin_family = AF_INET;
-	sin.sin_port = 9900; //icmp doesnt use a port
-	sin.sin_addr.s_addr = dest_addr;
+	sin.sin_port = 0; //icmp doesnt use a port
+	sin.sin_addr.s_addr = destination;
 
-	ip->version = 4;
-	ip->ihl = 5;
+	ip->version_ihl = (4 << 4) | 5;
 	ip->tos = 0;
-	ip->totalLength = 84;//total length
+	ip->totalLength = htons(84);//total length
 	ip->id = 0;
-	ip->flags = 0b010; //bits are R|DF|MF
-	ip->fragmentOffset = 0;
+	ip->flag_fragOff = htons((u_int16_t)(0b010 << 13) | 0); //bits are R|DF|MF
 	ip->ttl = 64;
-	//checksum
-	ip->sourceAddr = src_addr;
-	ip->destAddr = dest_addr;
+	ip->checksum = 0;
+	ip->saddr = source;
+	ip->daddr = destination;
 
 
-	ip->checksum = checksum(ip->totalLength,buffer);
+	ip->checksum = checksum(ntohs(ip->totalLength),buffer);
 
 	FILE* fd = fopen("packet","w");
 	if (fd < 0) {
@@ -105,7 +101,7 @@ int main(void) {
 	fwrite(buffer, sizeof(char), PACKET_LENGTH, fd);
 	fclose(fd);
 
-	int sendError = sendto(socketd, buffer, ip->totalLength, 0, (struct sockaddr *)&sin, sizeof(sin));
+	int sendError = sendto(socketd, buffer, ntohs(ip->totalLength), 0, (struct sockaddr *)&sin, sizeof(sin));
 	
 	if (sendError < 0) {
 		perror("sendto()");
