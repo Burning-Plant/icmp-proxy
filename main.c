@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 
 #define PACKET_LENGTH 4096
-//#define DEBUG
+#define DEBUG
 
 #pragma pack(push, 1)
 typedef struct iphdr {
@@ -22,6 +22,12 @@ typedef struct iphdr {
     uint32_t saddr;       // Source Address
     uint32_t daddr;       // Destination Address
 } iphdr;
+
+typedef struct icmphdr {
+	u_int8_t type;
+	u_int8_t code;
+	u_int16_t checksum;
+} icmphdr;
 #pragma pack(pop)
 
 // From RFC 1071 //
@@ -58,7 +64,7 @@ int main(void) {
 	u_int16_t src_port, dest_port;
 	u_int32_t source, destination;
 	destination = inet_addr("8.8.8.8");
-	source = inet_addr("192.168.1.198");
+	source = inet_addr("10.56.255.132");
 
 
 	char buffer[PACKET_LENGTH];
@@ -70,11 +76,14 @@ int main(void) {
 
 	int socketd = socket(PF_INET, SOCK_RAW, IPPROTO_RAW);
 	if( socketd < 0) {
-		perror("socket() error");
+		perror("socket()");
 		exit(-2);
 	}
 	int one = 1;
-	setsockopt(socketd,IPPROTO_IP, IP_HDRINCL, &one, sizeof(one));
+	if (setsockopt(socketd,IPPROTO_IP, IP_HDRINCL, &one, sizeof(one)) < 0) {
+		perror("setsocketopt()");
+		exit(-5);
+	}
 
 
 	sin.sin_family = AF_INET;
@@ -91,6 +100,9 @@ int main(void) {
 	ip->saddr = source;
 	ip->daddr = destination;
 
+	icmp->type = 8;
+	icmp->code = 0;
+	ip->checksum = checksum(32,(buffer + sizeof(iphdr)));
 
 	ip->checksum = checksum(ntohs(ip->totalLength),buffer);
 
