@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 
 #define PACKET_LENGTH 4096
+//#define DEBUG
 
 #pragma pack(push, 1)
 typedef struct iphdr {
@@ -93,6 +94,7 @@ int main(void) {
 
 	ip->checksum = checksum(ntohs(ip->totalLength),buffer);
 
+#ifdef DEBUG
 	FILE* fd = fopen("packet","w");
 	if (fd < 0) {
 		perror("fopen()");
@@ -100,6 +102,7 @@ int main(void) {
 	}
 	fwrite(buffer, sizeof(char), PACKET_LENGTH, fd);
 	fclose(fd);
+#endif
 
 	int sendError = sendto(socketd, buffer, ntohs(ip->totalLength), 0, (struct sockaddr *)&sin, sizeof(sin));
 	
