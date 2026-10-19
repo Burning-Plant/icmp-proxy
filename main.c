@@ -11,20 +11,20 @@
 typedef struct iphdr {
 	unsigned int version : 4;
 	unsigned int ihl : 4;
-	u_int8_t tos;
-	u_int16_t totalLength;
+	unsigned int tos : 8;
+	unsigned int totalLength : 16;
 
-	u_int16_t id;
+	unsigned int id : 16;
 	unsigned int flags : 3;
 	unsigned int fragmentOffset : 13;
 
-	u_int8_t ttl;
-	u_int8_t protocol;
-	u_int16_t checksum;
+	unsigned int ttl : 16;
+	unsigned int protocol : 16;
+	unsigned int checksum : 16;
 
-	u_int32_t sourceAddr;
+	unsigned int sourceAddr : 32;
 
-	u_int32_t destAddr;
+	unsigned destAddr : 32;
 }iphdr;
 
 // From RFC 1071 //
@@ -61,7 +61,7 @@ int main(void) {
 	u_int16_t src_port, dest_port;
 	u_int32_t src_addr, dest_addr;
 	dest_addr = inet_addr("8.8.8.8");
-	src_addr = inet_addr("127.0.0.1");
+	src_addr = inet_addr("192.168.1.186");
 
 
 	char buffer[PACKET_LENGTH];
@@ -96,6 +96,14 @@ int main(void) {
 
 
 	ip->checksum = checksum(ip->totalLength,buffer);
+
+	FILE* fd = fopen("packet","w");
+	if (fd < 0) {
+		perror("fopen()");
+		exit(-4);
+	}
+	fwrite(buffer, sizeof(char), PACKET_LENGTH, fd);
+	fclose(fd);
 
 	int sendError = sendto(socketd, buffer, ip->totalLength, 0, (struct sockaddr *)&sin, sizeof(sin));
 	
