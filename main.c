@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 
 #define PACKET_LENGTH 4096
-#define DEBUG
+//#define DEBUG
 
 #pragma pack(push, 1)
 typedef struct iphdr {
@@ -59,12 +59,21 @@ u_int16_t checksum(int count, void* addr){
 
 
 
-int main(void) {
+int main(int argc, char **argv) {
 
+	if (argc < 3) {
+		printf("Need 2 arguments");
+		return -6;
+	}
 	u_int16_t src_port, dest_port;
 	u_int32_t source, destination;
-	destination = inet_addr("8.8.8.8");
-	source = inet_addr("10.56.255.132");
+	destination = inet_addr(argv[2]);
+	source = inet_addr(argv[1]);
+
+	if (destination < 0 || source < 0) {
+		perror("inet_addr");
+		exit(-7);
+	}
 
 
 	char buffer[PACKET_LENGTH];
@@ -102,7 +111,7 @@ int main(void) {
 
 	icmp->type = 8;
 	icmp->code = 0;
-	ip->checksum = checksum(32,(buffer + sizeof(iphdr)));
+	icmp->checksum = checksum(32,(buffer + sizeof(iphdr)));
 
 	ip->checksum = checksum(ntohs(ip->totalLength),buffer);
 
